@@ -4,10 +4,29 @@ API REST para calcular el valor total de un portafolio de criptomonedas en moned
 
 ---
 
+## ⚠️ Nota de Seguridad
+
+Esta API es una **prueba de concepto**. Se han saltado varios pasos de seguridad en producción:
+-  Sin autenticación/autorización
+-  Sin rate limiting
+-  Sin validación avanzada de CORS
+-  Sin logs persistentes
+-  Sin monitoreo en tiempo real
+
+**No usar en ambiente de producción real sin implementar estas medidas.**
+
+---
+
 ## Base URL
 
+**Desarrollo:**
 ```
 http://localhost:8000
+```
+
+**Producción:**
+```
+https://buda-production.up.railway.app
 ```
 
 ---
