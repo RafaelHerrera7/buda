@@ -13,31 +13,7 @@ app = FastAPI(
 )
 service = PortfolioService()
 
-
-@app.exception_handler(BudaAPIError)
-async def buda_api_error_handler(request, exc: BudaAPIError):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": str(exc)}
-    )
-
-
-@app.get("/", tags=["Health"])
-async def read_root():
-    """Health check - verifica que el servidor está activo"""
-    return {"Hello": "Hello Buda!"}
-
-
-@app.post(
-    "/v1/portfolio/value",
-    tags=["Portfolio"],
-    summary="Calcular valor de portafolio",
-    description="Calcula el valor total de un portafolio de criptomonedas en una moneda fiat específica. "
-                "Soporta múltiples criptomonedas (BTC, ETH, BCH, LTC, USDC, USDT) y monedas fiat (CLP, COP, PEN). "
-                "Utiliza precios de mercado actuales obtenidos en tiempo real de Buda.com.",
-    response_model=PortfolioResponse, 
-    status_code=status.HTTP_200_OK,
-    responses={
+RESPONSE_FOR_PORTFOLIO_VALUE = {
         200: {
             "description": "Valor total del portafolio calculado exitosamente.",
             "content": {
@@ -63,6 +39,30 @@ async def read_root():
             "description": "Error de validación del Request Body (Pydantic)."
         }
     }
+@app.exception_handler(BudaAPIError)
+async def buda_api_error_handler(request, exc: BudaAPIError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": str(exc)}
+    )
+
+
+@app.get("/", tags=["Health"])
+async def read_root():
+    """Health check - verifica que el servidor está activo"""
+    return {"Hello": "Hello Buda!"}
+
+
+@app.post(
+    "/v1/portfolio/value",
+    tags=["Portfolio"],
+    summary="Calcular valor de portafolio",
+    description="Calcula el valor total de un portafolio de criptomonedas en una moneda fiat específica. "
+                "Soporta múltiples criptomonedas (BTC, ETH, BCH, LTC, USDC, USDT) y monedas fiat (CLP, COP, PEN). "
+                "Utiliza precios de mercado actuales obtenidos en tiempo real de Buda.com.",
+    response_model=PortfolioResponse, 
+    status_code=status.HTTP_200_OK,
+    responses=RESPONSE_FOR_PORTFOLIO_VALUE
 )
 async def calculate_portfolio_value(
     portfolio:PortfolioRequest

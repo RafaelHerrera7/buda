@@ -18,6 +18,13 @@ class PortfolioService:
         """
         fiat_upper = portfolio_data.fiat_currency.upper()
         
+        for base_currency, qty in portfolio_data.portfolio.items():
+            if qty < 0:
+                raise BudaAPIError(
+                    f"Cantidad inválida (negativa) para {base_currency}: {qty}",
+                    status_code=400
+                )
+
         for base_currency in portfolio_data.portfolio.keys():
             base_upper = base_currency.upper()
             
