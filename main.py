@@ -1,8 +1,20 @@
+# SUPUESTOS UTILIZADOS:
+# - Proyecto creado como prueba técnica (1.5 horas). Simplificaciones intencionales:
+#   * Sin autenticación ni rate limiting.
+#   * No hay gestión de secrets; usar variables de entorno en producción.
+#   * Caché en memoria con TTL (por proceso) para reducir llamadas a Buda.com.
+#   * Decisiones enfocadas a claridad y rapidez para la prueba; no a alta
+#     disponibilidad o multi-replica.
+#   * Logging reducido o deshabilitado por defecto (se puede activar si es
+#     necesario).
+# - Ver README para notas de seguridad y despliegue en Railway.
+
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from models.portfolio import PortfolioRequest, PortfolioResponse
 from services.portfolio_service import PortfolioService
 from clients.buda_client import BudaAPIError
+from config.constants import RESPONSE_FOR_PORTFOLIO_VALUE
 
 import uvicorn
 
@@ -13,32 +25,6 @@ app = FastAPI(
 )
 service = PortfolioService()
 
-RESPONSE_FOR_PORTFOLIO_VALUE = {
-        200: {
-            "description": "Valor total del portafolio calculado exitosamente.",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "portfolio_value": 46312554.36,
-                        "fiat_currency": "CLP"
-                    }
-                }
-            }
-        },
-        400: {
-            "description": "Error en la solicitud o en la API de Buda.com.",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "El par de mercado 'XRP-CLP' no está soportado para valorización directa."
-                    }
-                }
-            }
-        },
-        422: {
-            "description": "Error de validación del Request Body (Pydantic)."
-        }
-    }
 @app.exception_handler(BudaAPIError)
 async def buda_api_error_handler(request, exc: BudaAPIError):
     return JSONResponse(
@@ -46,34 +32,38 @@ async def buda_api_error_handler(request, exc: BudaAPIError):
         content={"detail": str(exc)}
     )
 
-
 @app.get("/", tags=["Health"])
 async def read_root():
-    """Health check - verifica que el servidor está activo"""
     return {"Hello": "Hello Buda!"}
-
 
 @app.post(
     "/v1/portfolio/value",
     tags=["Portfolio"],
     summary="Calcular valor de portafolio",
-    description="Calcula el valor total de un portafolio de criptomonedas en una moneda fiat específica. "
-                "Soporta múltiples criptomonedas (BTC, ETH, BCH, LTC, USDC, USDT) y monedas fiat (CLP, COP, PEN). "
-                "Utiliza precios de mercado actuales obtenidos en tiempo real de Buda.com.",
     response_model=PortfolioResponse, 
     status_code=status.HTTP_200_OK,
     responses=RESPONSE_FOR_PORTFOLIO_VALUE
 )
-async def calculate_portfolio_value(
-    portfolio:PortfolioRequest
-):
-    """Calcula el valor total de un portafolio de criptomonedas."""
+async def calculate_portfolio_value(portfolio: PortfolioRequest):
+    """Endpoint para calcular el valor de un portafolio.
+
+    Recibe un `PortfolioRequest`, delega la lógica a `PortfolioService` y
+    devuelve el resultado en JSON.
+
+    Args:
+        portfolio (PortfolioRequest): Request con `portfolio` y `fiat_currency`.
+
+    Returns:
+        dict: {"portfolio_value": float, "fiat_currency": str}
+
+    Raises:
+        BudaAPIError: Si el servicio o el cliente Buda reportan un error
+            (ej. par no válido, tiempo de espera, servicio externo caído).
+    """
     total_value = await service.calculate_total_value(portfolio)
-    """
-    SUPUESTO UTILIZADO: 
-    - Se retorna el valor total calculado y la moneda fiat en un dict, esto se considera importante para el response_model 
-    """
+
     return {"portfolio_value": total_value, "fiat_currency": portfolio.fiat_currency}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

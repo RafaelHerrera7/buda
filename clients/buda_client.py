@@ -1,16 +1,15 @@
+# SUPUESTOS UTILIZADOS (cliente Buda):
+# - Se descarga el listado completo de /tickers y se cachea durante 30s.
+# - Esta aproximación es válida para la prueba; en producción preferiría
+#   consultas por par y/o un cache centralizado compartido entre réplicas.
+# - La caché es en memoria y por proceso; no cubre casos multi-replica.
+# - Se normalizan errores httpx a BudaAPIError con status_code apropiado.
+# - Timeout 5s y manejo de errores (503/504/500) para comunicarse con Buda.
+
 import httpx
 import time
 
-BASE_URL = "https://www.buda.com/api/v2"
-
-VALID_PAIRS = {
-    "BTC": ["CLP", "COP", "PEN"],
-    "ETH": ["CLP", "COP", "PEN"],
-    "BCH": ["CLP", "COP", "PEN"],
-    "LTC": ["CLP", "COP", "PEN"],
-    "USDC": ["CLP", "COP", "PEN"],
-    "USDT": ["CLP", "COP", "PEN"],
-}
+from config.constants import BASE_URL, VALID_PAIRS
 
 
 class TickersCache:
@@ -46,19 +45,29 @@ class BudaAPIError(Exception):
         self.status_code = status_code
         super().__init__(f"Buda API Error ({status_code}): {message}")
 
-"""
-SUPUESTOS UTILIZADOS:
-- Se hace llamdo a todos los tickers, esto se justifica por el tamaño del mismo
-- Se cachean los datos por 30 segundos para evitar múltiples llamadas en corto tiempo
-- Se considera de esta manera por ser un caso test
-- Le implementaria una consulta por par en un caso real de producción, de esta menera solo se consulta lo necesario
-"""
 class BudaClient:
     def __init__(self):
         self.client = httpx.AsyncClient(base_url=BASE_URL, timeout=5.0)
         self.cache = TickersCache()
 
     async def get_current_price(self, base_currency: str, quote_currency: str) -> float:
+        """Obtiene el último precio para un par de mercado.
+
+        Esta función utiliza la caché de `/tickers` para reducir llamadas de
+        red. Si la caché está vacía o expirada, solicita los tickers a Buda y
+        luego extrae el precio solicitado.
+
+        Args:
+            base_currency (str): Código de la moneda base (p. ej. "BTC").
+            quote_currency (str): Código de la moneda cotizada (p. ej. "CLP").
+
+        Returns:
+            float: Último precio negociado para el par.
+
+        Raises:
+            BudaAPIError: Si el par no existe o si hay errores de red/HTTP al
+                obtener los datos. La excepción incluye `status_code`.
+        """
         base_upper = base_currency.upper()
         quote_upper = quote_currency.upper()
         market_id = f"{base_upper}-{quote_upper}"
@@ -66,15 +75,27 @@ class BudaClient:
         tickers_data = self.cache.get()
         
         if tickers_data is None:
-            print(f"[API] Llamada a {market_id}")
             tickers_data = await self._fetch_tickers()
             self.cache.set(tickers_data)
         else:
-            print(f"[CACHE] Usando datos cacheados para {market_id}")
+            pass
         
         return self._extract_price_from_tickers(tickers_data, market_id)
     
     async def _fetch_tickers(self) -> dict:
+        """Solicita y valida el payload de `/tickers` desde Buda.
+
+        Realiza la petición HTTP, valida la estructura y devuelve el JSON.
+        Los errores de red y de respuesta se traducen a `BudaAPIError` con un
+        `status_code` apropiado.
+
+        Returns:
+            dict: JSON con la clave `tickers`.
+
+        Raises:
+            BudaAPIError: En caso de HTTP status no exitoso, timeout, problemas
+                de conexión o respuesta inválida/no JSON.
+        """
         try:
             response = await self.client.get("/tickers")
             response.raise_for_status()
@@ -112,6 +133,21 @@ class BudaClient:
             ) from e
     
     def _extract_price_from_tickers(self, tickers_data: dict, market_id: str) -> float:
+        """Extrae el último precio para un `market_id` del payload de tickers.
+
+        Busca el ticker correspondiente y parsea `last_price` a float.
+
+        Args:
+            tickers_data (dict): JSON con la lista `tickers`.
+            market_id (str): Identificador del mercado, p. ej. 'BTC-CLP'.
+
+        Returns:
+            float: Último precio registrado para el par.
+
+        Raises:
+            BudaAPIError: 500 si el precio no se puede parsear; 404 si el par
+                no se encuentra en el payload.
+        """
         for ticker in tickers_data.get('tickers', []):
             if ticker.get('market_id') == market_id:
                 last_price = ticker.get('last_price')

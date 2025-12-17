@@ -1,3 +1,10 @@
+# SUPUESTOS UTILIZADOS (servicio de portafolio):
+# - Valida localmente pares cripto-fiat contra VALID_PAIRS para evitar llamadas
+#   innecesarias a la API externa.
+# - No admite cantidades negativas en el portafolio (se consideran inválidas).
+# - Usa BudaClient para consulta de precios y propaga BudaAPIError para que
+#   el handler global de FastAPI genere respuestas HTTP apropiadas.
+
 from clients.buda_client import BudaClient, BudaAPIError, VALID_PAIRS
 from models.portfolio import PortfolioRequest
 
@@ -7,14 +14,21 @@ class PortfolioService:
         self.client = BudaClient()
 
     async def calculate_total_value(self, portfolio_data: PortfolioRequest) -> float:
-        """
-        Calcula el valor total del portafolio en la moneda solicitada.
+        """Calcula el valor total del portafolio en la moneda fiat indicada.
+
+        Valida que las cantidades sean no negativas y que los pares cripto-fiat
+        estén soportados antes de solicitar precios al cliente Buda.
 
         Args:
-            portfolio_data: Datos del portafolio con monedas y cantidad de cada una.
+            portfolio_data (PortfolioRequest): Modelo con `portfolio` y
+                `fiat_currency`.
 
         Returns:
-            El valor total del portafolio en la moneda fiat solicitada.
+            float: Suma de (precio × cantidad) para todas las monedas.
+
+        Raises:
+            BudaAPIError: Si hay cantidades negativas o pares no soportados
+                (status_code=400). También propaga errores de BudaClient.
         """
         fiat_upper = portfolio_data.fiat_currency.upper()
         
