@@ -16,25 +16,37 @@ class TestPortfolioLogic:
     
     @pytest.mark.asyncio
     async def test_portfolio_value_case_real(self):
-        service = PortfolioService()
 
+        service = PortfolioService()
+        
         prices = {
             ("BTC", "CLP"): 80000000.0,
             ("ETH", "CLP"): 3000000.0,
             ("USDT", "CLP"): 312.554,
         }
-
-        async def _side_effect(base, quote):
-            return prices[(base.upper(), quote.upper())]
-
-        with patch.object(service.client, 'get_current_price', side_effect=_side_effect):
+        
+        async def mock_get_price(base, quote):
+            key = (base.upper(), quote.upper())
+            if key not in prices:
+                raise BudaAPIError(f"Par no encontrado: {base}-{quote}", status_code=404)
+            return prices[key]
+        
+        with patch.object(service.client, 'get_current_price', side_effect=mock_get_price):
             portfolio = PortfolioRequest(
-                portfolio={"BTC": 0.5, "ETH": 2.0, "USDT": 1000},
+                portfolio={
+                    "BTC": 0.5,
+                    "ETH": 2.0,
+                    "USDT": 1000
+                },
                 fiat_currency="CLP"
             )
-
+            
             total = await service.calculate_total_value(portfolio)
-            assert total == 46312554.0
+
+            expected = 46312554.0
+            assert total == expected
+
+    @pytest.mark.asyncio
     async def test_invalid_currency_raises_error(self):
         service = PortfolioService()
         
