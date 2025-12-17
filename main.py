@@ -45,21 +45,7 @@ async def read_root():
     responses=RESPONSE_FOR_PORTFOLIO_VALUE
 )
 async def calculate_portfolio_value(portfolio: PortfolioRequest):
-    """Endpoint para calcular el valor de un portafolio.
 
-    Recibe un `PortfolioRequest`, delega la lógica a `PortfolioService` y
-    devuelve el resultado en JSON.
-
-    Args:
-        portfolio (PortfolioRequest): Request con `portfolio` y `fiat_currency`.
-
-    Returns:
-        dict: {"portfolio_value": float, "fiat_currency": str}
-
-    Raises:
-        BudaAPIError: Si el servicio o el cliente Buda reportan un error
-            (ej. par no válido, tiempo de espera, servicio externo caído).
-    """
     total_value = await service.calculate_total_value(portfolio)
 
     return {"portfolio_value": total_value, "fiat_currency": portfolio.fiat_currency}
