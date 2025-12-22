@@ -11,7 +11,7 @@
 
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
-from models.portfolio import PortfolioRequest, PortfolioResponse
+from models.portfolio import PortfolioRequest, PortfolioResponse, PortfolioExactResponse
 from services.portfolio_service import PortfolioService
 from clients.buda_client import BudaAPIError
 from config.constants import RESPONSE_FOR_PORTFOLIO_VALUE
@@ -50,6 +50,23 @@ async def calculate_portfolio_value(portfolio: PortfolioRequest):
 
     return {"portfolio_value": total_value, "fiat_currency": portfolio.fiat_currency}
 
+
+@app.post(
+    "/v1/portfolio/value/exact",
+    tags=["Portfolio"],
+    summary="Calcular valor exacto de portafolio (fill desde order book)",
+    response_model=PortfolioExactResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def calculate_portfolio_value_exact(portfolio: PortfolioRequest):
+    """Endpoint que calcula el valor exacto para un `PortfolioRequest` (todo el portafolio).
+
+    Devuelve el diccionario {"portfolio_value": total, "fiat_currency": fiat, "breakdown": {...}}.
+    """
+    total_value, breakdown = await service.calculate_total_value_exact(portfolio)
+    return {"portfolio_value": total_value, "fiat_currency": portfolio.fiat_currency, "breakdown": breakdown}
+
+# definir endpoint
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

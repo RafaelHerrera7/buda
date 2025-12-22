@@ -50,6 +50,16 @@ class BudaClient:
         self.client = httpx.AsyncClient(base_url=BASE_URL, timeout=5.0)
         self.cache = TickersCache()
 
+    # caso valor más exacto
+    async def calculate_total_value_exact(self, base_currency: str, quote_currency: str) -> dict:
+        """Devuelve el `order_book` del mercado sin procesarlo.
+
+        Se delega en `_fetch_order_book` para obtener el payload y se retorna
+        el diccionario `order_book` tal cual (contiene `asks` y `bids`).
+        """
+        order_book = await self._fetch_order_book(f"{base_currency.upper()}-{quote_currency.upper()}")
+        return order_book
+    
     async def get_current_price(self, base_currency: str, quote_currency: str) -> float:
         """Obtiene el último precio para un par de mercado.
 
@@ -82,6 +92,20 @@ class BudaClient:
         
         return self._extract_price_from_tickers(tickers_data, market_id)
     
+    async def _fetch_order_book(self, market_id: str) -> dict:
+        try:
+            response = await self.client.get(f"/markets/{market_id}/order_book")
+            response.raise_for_status()
+            data = response.json()
+            if 'order_book' not in data:
+                raise BudaAPIError("Respuesta inválida", status_code=400)
+            return data['order_book']
+        except httpx.HTTPStatusError as e:
+            raise BudaAPIError(
+                f"Error API {e.response.status_code}",
+                status_code=e.response.status_code
+            ) from e
+            
     async def _fetch_tickers(self) -> dict:
         """Solicita y valida el payload de `/tickers` desde Buda.
 

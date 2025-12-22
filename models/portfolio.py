@@ -58,3 +58,49 @@ class PortfolioResponse(BaseModel):
         description="Moneda en la que se calculó el valor total",
         examples=["CLP"]
     )
+
+
+class PortfolioExactResponse(BaseModel):
+    """Respuesta para el cálculo exacto: incluye desglose por moneda."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "portfolio_value": 46312554.36,
+                "fiat_currency": "CLP",
+                "breakdown": {
+                    "BTC": 30000000.0,
+                    "ETH": 1000000.0
+                }
+            }
+        }
+    )
+
+    portfolio_value: float = Field(..., title="Valor Total (Exacto)")
+    fiat_currency: str = Field(..., title="Moneda Fiat")
+    breakdown: dict = Field(..., title="Desglose por moneda", description="Mapa moneda → valor en fiat")
+
+
+class PortfolioExactRequest(BaseModel):
+    """Esquema exacto mínimo: recibe `market_id` y `quantity` (cantidad a comprar)."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "market_id": "btc-clp",
+                "quantity": 0.5
+            }
+        }
+    )
+
+    market_id: str = Field(
+        ...,
+        title="Market ID",
+        description="Identificador del mercado en formato 'base-quote' (p.ej. 'btc-clp')."
+    )
+    quantity: float = Field(
+        ...,
+        gt=0,
+        title="Cantidad",
+        description="Cantidad positiva de la moneda base a comprar."
+    )

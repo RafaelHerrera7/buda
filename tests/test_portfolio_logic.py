@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 
 from clients.buda_client import BudaAPIError
-from models.portfolio import PortfolioRequest
+from models.portfolio import PortfolioRequest, PortfolioExactRequest
 from services.portfolio_service import PortfolioService
 
 """
@@ -151,3 +151,26 @@ class TestPortfolioLogic:
             
             total = await service.calculate_total_value(portfolio)
             assert total == 0.5 * 180000000.0
+
+    
+    @pytest.mark.asyncio
+    async def test_calculate_total_value_exact_insufficient_liquidity(self):
+        service = PortfolioService()
+
+        async def fake_fetch(base, quote):
+            if base.upper() == "BTC":
+                return {"bids": [["100.0","0.05"],["99.0","0.05"]]}
+            return {"bids": []}
+
+        with patch.object(service.client, 'calculate_total_value_exact', side_effect=fake_fetch):
+            portfolio = PortfolioRequest(
+                portfolio={"BTC": 0.2},
+                fiat_currency="CLP"
+            )
+
+            with pytest.raises(BudaAPIError) as exc_info:
+                await service.calculate_total_value_exact(portfolio)
+
+            assert exc_info.value.status_code == 400
+            assert "Liquidez insuficiente" in str(exc_info.value)
+  

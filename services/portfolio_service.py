@@ -6,12 +6,50 @@
 #   el handler global de FastAPI genere respuestas HTTP apropiadas.
 
 from clients.buda_client import BudaClient, BudaAPIError, VALID_PAIRS
-from models.portfolio import PortfolioRequest
+from models.portfolio import PortfolioExactRequest, PortfolioRequest
 
 
 class PortfolioService:
     def __init__(self):
         self.client = BudaClient()
+
+    async def calculate_total_value_exact(self, portfolio_data: PortfolioRequest) -> tuple[float, dict]:
+        """Calcula el valor exacto de TODO un `PortfolioRequest`.
+
+        Para cada moneda del `portfolio` solicita el `order_book` al cliente y
+        recorre las `bids` hasta cubrir la cantidad. Devuelve (total_value,
+        breakdown) donde `breakdown` es un mapa base->valor_en_fiat.
+        """
+        fiat = portfolio_data.fiat_currency
+        total_value = 0.0
+        breakdown: dict = {}
+
+        for base_currency, quantity in portfolio_data.portfolio.items():
+            # pedir order_book para cada par base-fiat
+            order_book = await self.client.calculate_total_value_exact(base_currency.upper(), fiat.upper())
+            bids = order_book.get('bids', []) if isinstance(order_book, dict) else []
+
+            remaining = float(quantity)
+            total_quote = 0.0
+
+            for bid in bids:
+                price = float(bid[0])
+                available = float(bid[1])
+
+                filled = min(available, remaining)
+                total_quote += price * filled
+                remaining -= filled
+
+                if remaining <= 1e-12:
+                    break
+
+            if remaining > 1e-12:
+                raise BudaAPIError(f"Liquidez insuficiente en {base_currency.upper()}-{fiat.upper()} para cantidad {quantity}", status_code=400)
+
+            breakdown[base_currency.upper()] = total_quote
+            total_value += total_quote
+
+        return total_value, breakdown
 
     async def calculate_total_value(self, portfolio_data: PortfolioRequest) -> float:
         """Calcula el valor total del portafolio en la moneda fiat indicada.
